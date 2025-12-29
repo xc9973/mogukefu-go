@@ -41,6 +41,7 @@ type Config struct {
 	BlockExternalLinks     bool
 	SpamKeywords           []string
 	WhitelistedDomains     []string
+	WhitelistedChannels    []int64
 }
 
 // Dependencies holds all dependencies for the bot.
@@ -91,12 +92,14 @@ func NewTelegramBot(cfg Config, deps Dependencies, logger *slog.Logger) (*Telegr
 			BlockKeywords:          len(cfg.SpamKeywords) > 0,
 			WhitelistedDomains:     cfg.WhitelistedDomains,
 			WhitelistedUsers:       cfg.AdminIDs, // Admins bypass spam filter
+			WhitelistedChannels:    cfg.WhitelistedChannels,
 			SpamKeywords:           cfg.SpamKeywords,
 		})
 		logger.Info("antispam filter enabled",
 			"block_forwarded", cfg.BlockForwardedChannels,
 			"block_links", cfg.BlockExternalLinks,
 			"spam_keywords", len(cfg.SpamKeywords),
+			"whitelisted_channels", len(cfg.WhitelistedChannels),
 		)
 	}
 

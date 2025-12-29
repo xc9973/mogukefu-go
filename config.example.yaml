@@ -44,3 +44,7 @@ antispam:
   whitelisted_domains:
     - "t.me/your_channel"  # 你自己的频道
     - "your-domain.com"    # 你自己的网站
+  # 白名单频道ID (从这些频道转发的消息不会被拦截)
+  # 获取频道ID: 转发频道消息给 @userinfobot
+  whitelisted_channels:
+    - -1001234567890  # 你自己的频道ID (注意是负数)

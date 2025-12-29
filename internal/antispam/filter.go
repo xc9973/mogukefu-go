@@ -34,8 +34,9 @@ type Config struct {
 	BlockKeywords          bool     // Block messages containing spam keywords
 	
 	// Whitelist
-	WhitelistedDomains []string // Domains that are allowed (e.g., your own domain)
-	WhitelistedUsers   []int64  // Users that bypass spam filter
+	WhitelistedDomains  []string // Domains that are allowed (e.g., your own domain)
+	WhitelistedUsers    []int64  // Users that bypass spam filter
+	WhitelistedChannels []int64  // Channel IDs that are allowed to be forwarded from
 	
 	// Spam keywords
 	SpamKeywords []string // Keywords that trigger spam detection
@@ -45,10 +46,11 @@ type Config struct {
 type Filter struct {
 	config Config
 	
-	mu              sync.RWMutex
-	spamKeywords    []string
+	mu               sync.RWMutex
+	spamKeywords     []string
 	whitelistDomains map[string]bool
 	whitelistUsers   map[int64]bool
+	whitelistChannels map[int64]bool
 	
 	// Compiled regex for URL detection
 	urlRegex *regexp.Regexp
@@ -57,10 +59,11 @@ type Filter struct {
 // NewFilter creates a new spam filter.
 func NewFilter(cfg Config) *Filter {
 	f := &Filter{
-		config:           cfg,
-		spamKeywords:     cfg.SpamKeywords,
-		whitelistDomains: make(map[string]bool),
-		whitelistUsers:   make(map[int64]bool),
+		config:            cfg,
+		spamKeywords:      cfg.SpamKeywords,
+		whitelistDomains:  make(map[string]bool),
+		whitelistUsers:    make(map[int64]bool),
+		whitelistChannels: make(map[int64]bool),
 	}
 	
 	// Build whitelist maps
@@ -69,6 +72,9 @@ func NewFilter(cfg Config) *Filter {
 	}
 	for _, userID := range cfg.WhitelistedUsers {
 		f.whitelistUsers[userID] = true
+	}
+	for _, channelID := range cfg.WhitelistedChannels {
+		f.whitelistChannels[channelID] = true
 	}
 	
 	// Compile URL regex
@@ -127,6 +133,10 @@ func (f *Filter) isForwardedFromChannel(msg *tgbotapi.Message) bool {
 	if msg.ForwardFromChat != nil {
 		// Check if it's from a channel (not a group or user)
 		if msg.ForwardFromChat.Type == "channel" {
+			// Check if channel is whitelisted
+			if f.isChannelWhitelisted(msg.ForwardFromChat.ID) {
+				return false
+			}
 			return true
 		}
 	}
@@ -140,6 +150,13 @@ func (f *Filter) isForwardedFromChannel(msg *tgbotapi.Message) bool {
 	}
 	
 	return false
+}
+
+// isChannelWhitelisted checks if a channel is whitelisted.
+func (f *Filter) isChannelWhitelisted(channelID int64) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.whitelistChannels[channelID]
 }
 
 // hasExternalLinks checks if message contains external links.

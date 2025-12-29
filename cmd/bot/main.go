@@ -130,6 +130,7 @@ func main() {
 			BlockExternalLinks:     cfg.Antispam.BlockExternalLinks,
 			SpamKeywords:           cfg.Antispam.SpamKeywords,
 			WhitelistedDomains:     cfg.Antispam.WhitelistedDomains,
+			WhitelistedChannels:    cfg.Antispam.WhitelistedChannels,
 		},
 		deps,
 		log,

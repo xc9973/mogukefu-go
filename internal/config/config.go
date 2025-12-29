@@ -124,4 +124,5 @@ type AntispamConfig struct {
 	BlockExternalLinks     bool     `yaml:"block_external_links"`
 	SpamKeywords           []string `yaml:"spam_keywords"`
 	WhitelistedDomains     []string `yaml:"whitelisted_domains"`
+	WhitelistedChannels    []int64  `yaml:"whitelisted_channels"`
 }
