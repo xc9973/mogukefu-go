@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -215,6 +216,9 @@ func (b *TelegramBot) sendMessage(chatID int64, text string) error {
 // sendWithRetry sends a message with exponential backoff retry.
 // Implements Requirements 5.6
 func (b *TelegramBot) sendWithRetry(msg tgbotapi.MessageConfig) error {
+	// Ensure text is valid UTF-8 before sending
+	msg.Text = sanitizeUTF8(msg.Text)
+
 	maxRetries := 3
 	var lastErr error
 
@@ -238,6 +242,22 @@ func (b *TelegramBot) sendWithRetry(msg tgbotapi.MessageConfig) error {
 	}
 
 	return fmt.Errorf("failed to send message after %d retries: %w", maxRetries, lastErr)
+}
+
+// sanitizeUTF8 ensures the string is valid UTF-8 by replacing invalid sequences.
+func sanitizeUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+
+	// Replace invalid UTF-8 sequences with the Unicode replacement character
+	result := make([]rune, 0, len(s))
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		result = append(result, r)
+		i += size
+	}
+	return string(result)
 }
 
 // GetAPI returns the underlying Telegram Bot API for admin commands.
