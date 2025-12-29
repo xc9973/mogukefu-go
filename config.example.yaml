@@ -23,3 +23,24 @@ vector:
   # 短消息阈值（字符数）
   # 关键词未匹配且长度小于等于此值的消息将被忽略
   short_message_threshold: 10
+
+# 广告/垃圾消息过滤配置
+antispam:
+  # 是否启用广告过滤
+  enabled: true
+  # 是否拦截从其他频道转发的消息
+  block_forwarded_channels: true
+  # 是否拦截包含外部链接的消息
+  block_external_links: true
+  # 广告关键词列表 (包含这些词的消息会被删除)
+  spam_keywords:
+    - "加群"
+    - "代理"
+    - "优惠"
+    - "免费领"
+    - "点击链接"
+    - "私聊"
+  # 白名单域名 (这些域名的链接不会被拦截)
+  whitelisted_domains:
+    - "t.me/your_channel"  # 你自己的频道
+    - "your-domain.com"    # 你自己的网站

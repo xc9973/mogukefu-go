@@ -121,10 +121,15 @@ func main() {
 
 	telegramBot, err := bot.NewTelegramBot(
 		bot.Config{
-			Token:                 cfg.Bot.Token,
-			AdminIDs:              cfg.Bot.AdminIDs,
-			SimilarityThreshold:   cfg.Vector.SimilarityThreshold,
-			ShortMessageThreshold: cfg.Vector.ShortMessageThreshold,
+			Token:                  cfg.Bot.Token,
+			AdminIDs:               cfg.Bot.AdminIDs,
+			SimilarityThreshold:    cfg.Vector.SimilarityThreshold,
+			ShortMessageThreshold:  cfg.Vector.ShortMessageThreshold,
+			EnableAntispam:         cfg.Antispam.Enabled,
+			BlockForwardedChannels: cfg.Antispam.BlockForwardedChannels,
+			BlockExternalLinks:     cfg.Antispam.BlockExternalLinks,
+			SpamKeywords:           cfg.Antispam.SpamKeywords,
+			WhitelistedDomains:     cfg.Antispam.WhitelistedDomains,
 		},
 		deps,
 		log,

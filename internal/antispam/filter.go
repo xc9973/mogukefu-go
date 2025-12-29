@@ -1,0 +1,273 @@
+// Package antispam provides spam and advertisement filtering.
+package antispam
+
+import (
+	"regexp"
+	"strings"
+	"sync"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+// FilterResult represents the result of spam filtering.
+type FilterResult struct {
+	IsSpam   bool
+	Reason   string
+	Action   Action
+}
+
+// Action defines what action to take on spam.
+type Action int
+
+const (
+	ActionNone Action = iota
+	ActionDelete
+	ActionWarn
+	ActionBan
+)
+
+// Config holds configuration for the spam filter.
+type Config struct {
+	// Enable/disable features
+	BlockForwardedChannels bool     // Block messages forwarded from channels
+	BlockExternalLinks     bool     // Block messages with external links
+	BlockKeywords          bool     // Block messages containing spam keywords
+	
+	// Whitelist
+	WhitelistedDomains []string // Domains that are allowed (e.g., your own domain)
+	WhitelistedUsers   []int64  // Users that bypass spam filter
+	
+	// Spam keywords
+	SpamKeywords []string // Keywords that trigger spam detection
+}
+
+// Filter implements spam filtering logic.
+type Filter struct {
+	config Config
+	
+	mu              sync.RWMutex
+	spamKeywords    []string
+	whitelistDomains map[string]bool
+	whitelistUsers   map[int64]bool
+	
+	// Compiled regex for URL detection
+	urlRegex *regexp.Regexp
+}
+
+// NewFilter creates a new spam filter.
+func NewFilter(cfg Config) *Filter {
+	f := &Filter{
+		config:           cfg,
+		spamKeywords:     cfg.SpamKeywords,
+		whitelistDomains: make(map[string]bool),
+		whitelistUsers:   make(map[int64]bool),
+	}
+	
+	// Build whitelist maps
+	for _, domain := range cfg.WhitelistedDomains {
+		f.whitelistDomains[strings.ToLower(domain)] = true
+	}
+	for _, userID := range cfg.WhitelistedUsers {
+		f.whitelistUsers[userID] = true
+	}
+	
+	// Compile URL regex
+	f.urlRegex = regexp.MustCompile(`(?i)(https?://|t\.me/|@)[^\s]+`)
+	
+	return f
+}
+
+// Check checks if a message is spam.
+func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
+	// Skip if user is whitelisted
+	if msg.From != nil && f.isUserWhitelisted(msg.From.ID) {
+		return &FilterResult{IsSpam: false}
+	}
+	
+	// Check forwarded messages from channels
+	if f.config.BlockForwardedChannels && f.isForwardedFromChannel(msg) {
+		return &FilterResult{
+			IsSpam: true,
+			Reason: "转发自其他频道的消息",
+			Action: ActionDelete,
+		}
+	}
+	
+	// Check for external links
+	if f.config.BlockExternalLinks && f.hasExternalLinks(msg) {
+		return &FilterResult{
+			IsSpam: true,
+			Reason: "包含外部链接",
+			Action: ActionDelete,
+		}
+	}
+	
+	// Check for spam keywords
+	if f.config.BlockKeywords && f.hasSpamKeywords(msg) {
+		return &FilterResult{
+			IsSpam: true,
+			Reason: "包含广告关键词",
+			Action: ActionDelete,
+		}
+	}
+	
+	return &FilterResult{IsSpam: false}
+}
+
+// isUserWhitelisted checks if a user is whitelisted.
+func (f *Filter) isUserWhitelisted(userID int64) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.whitelistUsers[userID]
+}
+
+// isForwardedFromChannel checks if message is forwarded from a channel.
+func (f *Filter) isForwardedFromChannel(msg *tgbotapi.Message) bool {
+	// Check if message is forwarded
+	if msg.ForwardFromChat != nil {
+		// Check if it's from a channel (not a group or user)
+		if msg.ForwardFromChat.Type == "channel" {
+			return true
+		}
+	}
+	
+	// Also check ForwardFrom for forwarded messages from users
+	// who have privacy settings that hide their identity
+	if msg.ForwardSenderName != "" {
+		// This is a forwarded message but we can't see the source
+		// You might want to be more lenient here
+		return false
+	}
+	
+	return false
+}
+
+// hasExternalLinks checks if message contains external links.
+func (f *Filter) hasExternalLinks(msg *tgbotapi.Message) bool {
+	text := msg.Text
+	if text == "" {
+		text = msg.Caption
+	}
+	if text == "" {
+		return false
+	}
+	
+	// Find all URLs
+	matches := f.urlRegex.FindAllString(text, -1)
+	for _, match := range matches {
+		if !f.isWhitelistedURL(match) {
+			return true
+		}
+	}
+	
+	// Check entities for URLs
+	entities := msg.Entities
+	if entities == nil {
+		entities = msg.CaptionEntities
+	}
+	for _, entity := range entities {
+		if entity.Type == "url" || entity.Type == "text_link" {
+			url := entity.URL
+			if url == "" && entity.Type == "url" {
+				// Extract URL from text
+				url = text[entity.Offset : entity.Offset+entity.Length]
+			}
+			if !f.isWhitelistedURL(url) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+// isWhitelistedURL checks if a URL is from a whitelisted domain.
+func (f *Filter) isWhitelistedURL(url string) bool {
+	url = strings.ToLower(url)
+	
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	
+	for domain := range f.whitelistDomains {
+		if strings.Contains(url, domain) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// hasSpamKeywords checks if message contains spam keywords.
+func (f *Filter) hasSpamKeywords(msg *tgbotapi.Message) bool {
+	text := strings.ToLower(msg.Text)
+	if text == "" {
+		text = strings.ToLower(msg.Caption)
+	}
+	if text == "" {
+		return false
+	}
+	
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	
+	for _, keyword := range f.spamKeywords {
+		if strings.Contains(text, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// UpdateSpamKeywords updates the spam keywords list.
+func (f *Filter) UpdateSpamKeywords(keywords []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.spamKeywords = keywords
+}
+
+// AddSpamKeyword adds a spam keyword.
+func (f *Filter) AddSpamKeyword(keyword string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.spamKeywords = append(f.spamKeywords, keyword)
+}
+
+// RemoveSpamKeyword removes a spam keyword.
+func (f *Filter) RemoveSpamKeyword(keyword string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	
+	keyword = strings.ToLower(keyword)
+	for i, kw := range f.spamKeywords {
+		if strings.ToLower(kw) == keyword {
+			f.spamKeywords = append(f.spamKeywords[:i], f.spamKeywords[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// GetSpamKeywords returns the current spam keywords.
+func (f *Filter) GetSpamKeywords() []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	
+	result := make([]string, len(f.spamKeywords))
+	copy(result, f.spamKeywords)
+	return result
+}
+
+// AddWhitelistedUser adds a user to the whitelist.
+func (f *Filter) AddWhitelistedUser(userID int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.whitelistUsers[userID] = true
+}
+
+// RemoveWhitelistedUser removes a user from the whitelist.
+func (f *Filter) RemoveWhitelistedUser(userID int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.whitelistUsers, userID)
+}

@@ -11,6 +11,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"github.com/xc9973/mogukefu-go/internal/antispam"
 	"github.com/xc9973/mogukefu-go/internal/embedding"
 	"github.com/xc9973/mogukefu-go/internal/handler"
 	"github.com/xc9973/mogukefu-go/internal/kbstore"
@@ -33,6 +34,13 @@ type Config struct {
 	AdminIDs              []int64
 	SimilarityThreshold   float64
 	ShortMessageThreshold int
+	
+	// Antispam settings
+	EnableAntispam         bool
+	BlockForwardedChannels bool
+	BlockExternalLinks     bool
+	SpamKeywords           []string
+	WhitelistedDomains     []string
 }
 
 // Dependencies holds all dependencies for the bot.
@@ -53,6 +61,7 @@ type TelegramBot struct {
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
 	adminCommands *AdminCommands
+	spamFilter    *antispam.Filter
 }
 
 // NewTelegramBot creates a new Telegram bot instance.
@@ -73,6 +82,23 @@ func NewTelegramBot(cfg Config, deps Dependencies, logger *slog.Logger) (*Telegr
 
 	// Initialize admin commands handler
 	bot.adminCommands = NewAdminCommands(bot, deps, cfg.AdminIDs, logger)
+	
+	// Initialize spam filter if enabled
+	if cfg.EnableAntispam {
+		bot.spamFilter = antispam.NewFilter(antispam.Config{
+			BlockForwardedChannels: cfg.BlockForwardedChannels,
+			BlockExternalLinks:     cfg.BlockExternalLinks,
+			BlockKeywords:          len(cfg.SpamKeywords) > 0,
+			WhitelistedDomains:     cfg.WhitelistedDomains,
+			WhitelistedUsers:       cfg.AdminIDs, // Admins bypass spam filter
+			SpamKeywords:           cfg.SpamKeywords,
+		})
+		logger.Info("antispam filter enabled",
+			"block_forwarded", cfg.BlockForwardedChannels,
+			"block_links", cfg.BlockExternalLinks,
+			"spam_keywords", len(cfg.SpamKeywords),
+		)
+	}
 
 	return bot, nil
 }
@@ -127,7 +153,39 @@ func (b *TelegramBot) handleMessage(msg *tgbotapi.Message) {
 		"chat_id", msg.Chat.ID,
 		"from_id", msg.From.ID,
 		"text_length", len(msg.Text),
+		"is_forwarded", msg.ForwardFromChat != nil,
 	)
+
+	// Check for spam/ads first (only in group chats)
+	if b.spamFilter != nil && msg.Chat.Type != "private" {
+		result := b.spamFilter.Check(msg)
+		if result.IsSpam {
+			b.logger.Warn("spam detected",
+				"chat_id", msg.Chat.ID,
+				"from_id", msg.From.ID,
+				"reason", result.Reason,
+			)
+			
+			// Try to delete the message
+			if result.Action == antispam.ActionDelete {
+				deleteMsg := tgbotapi.NewDeleteMessage(msg.Chat.ID, msg.MessageID)
+				if _, err := b.api.Request(deleteMsg); err != nil {
+					b.logger.Error("failed to delete spam message",
+						"error", err,
+						"chat_id", msg.Chat.ID,
+						"message_id", msg.MessageID,
+					)
+				} else {
+					b.logger.Info("spam message deleted",
+						"chat_id", msg.Chat.ID,
+						"message_id", msg.MessageID,
+						"reason", result.Reason,
+					)
+				}
+			}
+			return
+		}
+	}
 
 	// Check if it's a command
 	if msg.IsCommand() {
@@ -263,4 +321,9 @@ func sanitizeUTF8(s string) string {
 // GetAPI returns the underlying Telegram Bot API for admin commands.
 func (b *TelegramBot) GetAPI() *tgbotapi.BotAPI {
 	return b.api
+}
+
+// GetSpamFilter returns the spam filter for admin commands.
+func (b *TelegramBot) GetSpamFilter() *antispam.Filter {
+	return b.spamFilter
 }

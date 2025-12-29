@@ -25,6 +25,7 @@ type Config struct {
 	Bot       BotConfig       `yaml:"bot"`
 	Embedding EmbeddingConfig `yaml:"embedding"`
 	Vector    VectorConfig    `yaml:"vector"`
+	Antispam  AntispamConfig  `yaml:"antispam"`
 }
 
 // Load loads configuration from a YAML file.
@@ -114,4 +115,13 @@ func (c *Config) SetDefaults() {
 	if c.Vector.ShortMessageThreshold == 0 {
 		c.Vector.ShortMessageThreshold = 10
 	}
+}
+
+// AntispamConfig holds antispam configuration.
+type AntispamConfig struct {
+	Enabled                bool     `yaml:"enabled"`
+	BlockForwardedChannels bool     `yaml:"block_forwarded_channels"`
+	BlockExternalLinks     bool     `yaml:"block_external_links"`
+	SpamKeywords           []string `yaml:"spam_keywords"`
+	WhitelistedDomains     []string `yaml:"whitelisted_domains"`
 }
