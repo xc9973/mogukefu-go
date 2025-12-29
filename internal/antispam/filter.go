@@ -288,3 +288,64 @@ func (f *Filter) RemoveWhitelistedUser(userID int64) {
 	defer f.mu.Unlock()
 	delete(f.whitelistUsers, userID)
 }
+
+// AddWhitelistedChannel adds a channel to the whitelist.
+func (f *Filter) AddWhitelistedChannel(channelID int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.whitelistChannels[channelID] = true
+}
+
+// RemoveWhitelistedChannel removes a channel from the whitelist.
+func (f *Filter) RemoveWhitelistedChannel(channelID int64) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.whitelistChannels[channelID] {
+		delete(f.whitelistChannels, channelID)
+		return true
+	}
+	return false
+}
+
+// GetWhitelistedChannels returns all whitelisted channel IDs.
+func (f *Filter) GetWhitelistedChannels() []int64 {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	
+	result := make([]int64, 0, len(f.whitelistChannels))
+	for id := range f.whitelistChannels {
+		result = append(result, id)
+	}
+	return result
+}
+
+// AddWhitelistedDomain adds a domain to the whitelist.
+func (f *Filter) AddWhitelistedDomain(domain string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.whitelistDomains[strings.ToLower(domain)] = true
+}
+
+// RemoveWhitelistedDomain removes a domain from the whitelist.
+func (f *Filter) RemoveWhitelistedDomain(domain string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	domain = strings.ToLower(domain)
+	if f.whitelistDomains[domain] {
+		delete(f.whitelistDomains, domain)
+		return true
+	}
+	return false
+}
+
+// GetWhitelistedDomains returns all whitelisted domains.
+func (f *Filter) GetWhitelistedDomains() []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	
+	result := make([]string, 0, len(f.whitelistDomains))
+	for domain := range f.whitelistDomains {
+		result = append(result, domain)
+	}
+	return result
+}
