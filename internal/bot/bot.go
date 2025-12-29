@@ -161,6 +161,26 @@ func (b *TelegramBot) handleMessage(msg *tgbotapi.Message) {
 
 	// Check for spam/ads first (only in group chats)
 	if b.spamFilter != nil && msg.Chat.Type != "private" {
+		// Debug logging for spam detection
+		if msg.ReplyToMessage != nil {
+			b.logger.Debug("checking reply message",
+				"reply_to_forward_from_chat", msg.ReplyToMessage.ForwardFromChat != nil,
+				"reply_to_sender_chat", msg.ReplyToMessage.SenderChat != nil,
+			)
+			if msg.ReplyToMessage.ForwardFromChat != nil {
+				b.logger.Debug("reply_to_forward_from_chat details",
+					"type", msg.ReplyToMessage.ForwardFromChat.Type,
+					"id", msg.ReplyToMessage.ForwardFromChat.ID,
+				)
+			}
+			if msg.ReplyToMessage.SenderChat != nil {
+				b.logger.Debug("reply_to_sender_chat details",
+					"type", msg.ReplyToMessage.SenderChat.Type,
+					"id", msg.ReplyToMessage.SenderChat.ID,
+				)
+			}
+		}
+		
 		result := b.spamFilter.Check(msg)
 		if result.IsSpam {
 			b.logger.Warn("spam detected",
