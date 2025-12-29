@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: telegram-faq-bot
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./knowledge.db:/app/knowledge.db
+    environment:
+      - TZ=Asia/Shanghai
+    # Override default command if needed
+    # command: ["--config", "/app/config.yaml", "--db", "/app/knowledge.db", "--log-level", "debug"]
+
+  # Optional: Run vectorize tool
+  # docker compose run --rm vectorize --input /data/faq.yaml --output /app/knowledge.db
+  vectorize:
+    build: .
+    container_name: telegram-faq-vectorize
+    entrypoint: ["/app/vectorize"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./knowledge.db:/app/knowledge.db
+      - ./data:/data:ro
+    environment:
+      - TZ=Asia/Shanghai
+    profiles:
+      - tools

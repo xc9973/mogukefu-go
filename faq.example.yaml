@@ -1,0 +1,66 @@
+# FAQ 知识库数据示例
+# 使用 vectorize 工具将此文件导入数据库：
+# ./vectorize --input faq.example.yaml --output knowledge.db --config config.yaml
+
+# 关键词配置
+# 精确匹配消息中的关键词，直接返回预设回复
+keywords:
+  - keyword: "教程"
+    reply: "📖 新手指南：请查看置顶消息"
+
+  - keyword: "客服"
+    reply: |
+      👤 客服在线时间：9:00-18:00
+      请联系 @Admin
+
+  - keyword: "下载"
+    reply: |
+      📥 下载地址：
+      官网：https://example.com/download
+      备用：https://mirror.example.com
+
+# FAQ 配置
+# 使用向量相似度匹配用户问题
+faq:
+  - faq_id: "register"
+    question: "如何注册账号、注册流程、怎么注册"
+    answer: |
+      📝 注册步骤：
+      1. 访问官网点击注册
+      2. 填写手机号获取验证码
+      3. 设置密码完成注册
+
+  - faq_id: "forgot_password"
+    question: "忘记密码、密码找回、重置密码"
+    answer: |
+      🔑 密码找回：
+      1. 点击登录页的「忘记密码」
+      2. 输入注册手机号
+      3. 通过短信验证重置密码
+
+  - faq_id: "payment"
+    question: "如何付款、支付方式、怎么充值"
+    answer: |
+      💳 支付方式：
+      1. 支付宝
+      2. 微信支付
+      3. 银行卡转账
+      
+      请在个人中心选择充值金额后完成支付
+
+  - faq_id: "refund"
+    question: "如何退款、退款流程、申请退款"
+    answer: |
+      💰 退款流程：
+      1. 进入订单详情页
+      2. 点击「申请退款」
+      3. 填写退款原因
+      4. 等待客服审核（1-3个工作日）
+
+  - faq_id: "contact"
+    question: "联系方式、客服电话、官方邮箱"
+    answer: |
+      📞 联系我们：
+      客服电话：400-xxx-xxxx
+      官方邮箱：support@example.com
+      工作时间：周一至周五 9:00-18:00

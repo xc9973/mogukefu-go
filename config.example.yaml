@@ -1,0 +1,25 @@
+# Go Telegram FAQ Bot 配置示例
+# 复制此文件为 config.yaml 并填入实际配置
+
+bot:
+  # Telegram Bot Token (从 @BotFather 获取)
+  token: "YOUR_BOT_TOKEN"
+  # 管理员用户 ID 列表 (可通过 @userinfobot 获取)
+  admin_ids:
+    - 123456789  # 替换为实际的管理员 Telegram User ID
+
+embedding:
+  # OpenAI 格式 Embedding API 地址
+  base_url: "https://api.openai.com/v1"
+  # API 密钥
+  api_key: "YOUR_API_KEY"
+  # Embedding 模型名称
+  model: "text-embedding-3-small"
+
+vector:
+  # 向量相似度阈值 (0.0-1.0)
+  # 只有相似度超过此阈值的 FAQ 才会被返回
+  similarity_threshold: 0.75
+  # 短消息阈值（字符数）
+  # 关键词未匹配且长度小于等于此值的消息将被忽略
+  short_message_threshold: 10
