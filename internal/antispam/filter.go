@@ -91,11 +91,13 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 	}
 	
 	// Check forwarded messages from channels
-	if f.config.BlockForwardedChannels && f.isForwardedFromChannel(msg) {
-		return &FilterResult{
-			IsSpam: true,
-			Reason: "转发自其他频道的消息",
-			Action: ActionDelete,
+	if f.config.BlockForwardedChannels {
+		if reason := f.checkChannelSpam(msg); reason != "" {
+			return &FilterResult{
+				IsSpam: true,
+				Reason: reason,
+				Action: ActionDelete,
+			}
 		}
 	}
 	
@@ -129,15 +131,48 @@ func (f *Filter) isUserWhitelisted(userID int64) bool {
 
 // isForwardedFromChannel checks if message is forwarded from a channel.
 func (f *Filter) isForwardedFromChannel(msg *tgbotapi.Message) bool {
-	// Check if message is forwarded
+	return f.checkChannelSpam(msg) != ""
+}
+
+// checkChannelSpam checks for channel-related spam and returns the reason if found.
+func (f *Filter) checkChannelSpam(msg *tgbotapi.Message) string {
+	// Check if message is forwarded from a channel
 	if msg.ForwardFromChat != nil {
-		// Check if it's from a channel (not a group or user)
 		if msg.ForwardFromChat.Type == "channel" {
-			// Check if channel is whitelisted
-			if f.isChannelWhitelisted(msg.ForwardFromChat.ID) {
-				return false
+			if !f.isChannelWhitelisted(msg.ForwardFromChat.ID) {
+				return "转发自其他频道的消息"
 			}
-			return true
+		}
+	}
+	
+	// Check if this message is a reply to a channel message
+	// This catches the case where someone replies to a channel post in the group
+	if msg.ReplyToMessage != nil {
+		// Check if the replied message is forwarded from a channel
+		if msg.ReplyToMessage.ForwardFromChat != nil {
+			if msg.ReplyToMessage.ForwardFromChat.Type == "channel" {
+				if !f.isChannelWhitelisted(msg.ReplyToMessage.ForwardFromChat.ID) {
+					return "回复了频道消息（疑似广告引流）"
+				}
+			}
+		}
+		// Check if the replied message itself is a channel post (SenderChat)
+		if msg.ReplyToMessage.SenderChat != nil {
+			if msg.ReplyToMessage.SenderChat.Type == "channel" {
+				if !f.isChannelWhitelisted(msg.ReplyToMessage.SenderChat.ID) {
+					return "回复了频道消息（疑似广告引流）"
+				}
+			}
+		}
+	}
+	
+	// Check if the message itself is sent by a channel (SenderChat)
+	// This happens when a channel posts directly to a linked group
+	if msg.SenderChat != nil {
+		if msg.SenderChat.Type == "channel" {
+			if !f.isChannelWhitelisted(msg.SenderChat.ID) {
+				return "以频道身份发送的消息"
+			}
 		}
 	}
 	
@@ -146,10 +181,10 @@ func (f *Filter) isForwardedFromChannel(msg *tgbotapi.Message) bool {
 	if msg.ForwardSenderName != "" {
 		// This is a forwarded message but we can't see the source
 		// You might want to be more lenient here
-		return false
+		return ""
 	}
 	
-	return false
+	return ""
 }
 
 // isChannelWhitelisted checks if a channel is whitelisted.
