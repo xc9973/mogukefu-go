@@ -51,9 +51,6 @@ func (a *AdminCommands) HandleCommand(ctx context.Context, msg *tgbotapi.Message
 		"addkw": true, "delkw": true, "listkw": true,
 		"addfaq": true, "delfaq": true, "listfaq": true, "showfaq": true,
 		"exportkb": true, "importkb": true,
-		// Antispam whitelist commands
-		"addwldomain": true, "delwldomain": true, "listwldomain": true,
-		"addwlchannel": true, "delwlchannel": true, "listwlchannel": true,
 	}
 
 	if adminCommands[cmd] && !a.isAdmin(msg.From.ID) {
@@ -82,19 +79,6 @@ func (a *AdminCommands) HandleCommand(ctx context.Context, msg *tgbotapi.Message
 		a.handleExportKB(ctx, msg)
 	case "importkb":
 		a.handleImportKB(ctx, msg, args)
-	// Antispam whitelist commands
-	case "addwldomain":
-		a.handleAddWhitelistDomain(msg, args)
-	case "delwldomain":
-		a.handleDelWhitelistDomain(msg, args)
-	case "listwldomain":
-		a.handleListWhitelistDomains(msg)
-	case "addwlchannel":
-		a.handleAddWhitelistChannel(msg, args)
-	case "delwlchannel":
-		a.handleDelWhitelistChannel(msg, args)
-	case "listwlchannel":
-		a.handleListWhitelistChannels(msg)
 	default:
 		// Unknown command, ignore
 	}
@@ -117,16 +101,7 @@ func (a *AdminCommands) handleHelp(msg *tgbotapi.Message) {
 
 📦 知识库：
 /exportkb - 导出知识库
-/importkb <merge|overwrite> - 导入知识库
-
-🛡️ 广告过滤白名单：
-/addwldomain <域名> - 添加域名白名单
-/delwldomain <域名> - 删除域名白名单
-/listwldomain - 列出域名白名单
-
-/addwlchannel - 添加频道白名单(转发频道消息后回复此命令)
-/delwlchannel <频道ID> - 删除频道白名单
-/listwlchannel - 列出频道白名单`
+/importkb <merge|overwrite> - 导入知识库`
 
 	a.sendReply(msg, help)
 }
@@ -448,146 +423,4 @@ func (a *AdminCommands) sendReply(msg *tgbotapi.Message, text string) {
 	if err := a.bot.sendReply(msg, text); err != nil {
 		a.logger.Error("failed to send reply", "error", err)
 	}
-}
-
-// handleAddWhitelistDomain adds a domain to the whitelist.
-func (a *AdminCommands) handleAddWhitelistDomain(msg *tgbotapi.Message, args string) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	domain := strings.TrimSpace(args)
-	if domain == "" {
-		a.sendReply(msg, "❌ 请指定域名\n用法: /addwldomain <域名>")
-		return
-	}
-
-	a.bot.spamFilter.AddWhitelistedDomain(domain)
-	a.logger.Info("whitelist domain added", "domain", domain, "by", msg.From.ID)
-	a.sendReply(msg, fmt.Sprintf("✅ 域名已加入白名单: %s", domain))
-}
-
-// handleDelWhitelistDomain removes a domain from the whitelist.
-func (a *AdminCommands) handleDelWhitelistDomain(msg *tgbotapi.Message, args string) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	domain := strings.TrimSpace(args)
-	if domain == "" {
-		a.sendReply(msg, "❌ 请指定域名\n用法: /delwldomain <域名>")
-		return
-	}
-
-	if a.bot.spamFilter.RemoveWhitelistedDomain(domain) {
-		a.logger.Info("whitelist domain removed", "domain", domain, "by", msg.From.ID)
-		a.sendReply(msg, fmt.Sprintf("✅ 域名已从白名单移除: %s", domain))
-	} else {
-		a.sendReply(msg, fmt.Sprintf("❌ 域名不在白名单中: %s", domain))
-	}
-}
-
-// handleListWhitelistDomains lists all whitelisted domains.
-func (a *AdminCommands) handleListWhitelistDomains(msg *tgbotapi.Message) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	domains := a.bot.spamFilter.GetWhitelistedDomains()
-	if len(domains) == 0 {
-		a.sendReply(msg, "🔗 域名白名单为空")
-		return
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("🔗 域名白名单 (%d):\n\n", len(domains)))
-	for i, domain := range domains {
-		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, domain))
-	}
-
-	a.sendReply(msg, sb.String())
-}
-
-// handleAddWhitelistChannel adds a channel to the whitelist.
-func (a *AdminCommands) handleAddWhitelistChannel(msg *tgbotapi.Message, args string) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	// Check if this is a reply to a forwarded message
-	if msg.ReplyToMessage != nil && msg.ReplyToMessage.ForwardFromChat != nil {
-		channelID := msg.ReplyToMessage.ForwardFromChat.ID
-		channelTitle := msg.ReplyToMessage.ForwardFromChat.Title
-		
-		a.bot.spamFilter.AddWhitelistedChannel(channelID)
-		a.logger.Info("whitelist channel added", "channel_id", channelID, "title", channelTitle, "by", msg.From.ID)
-		a.sendReply(msg, fmt.Sprintf("✅ 频道已加入白名单:\nID: %d\n名称: %s", channelID, channelTitle))
-		return
-	}
-
-	// Try to parse channel ID from args
-	if args != "" {
-		var channelID int64
-		if _, err := fmt.Sscanf(strings.TrimSpace(args), "%d", &channelID); err == nil {
-			a.bot.spamFilter.AddWhitelistedChannel(channelID)
-			a.logger.Info("whitelist channel added", "channel_id", channelID, "by", msg.From.ID)
-			a.sendReply(msg, fmt.Sprintf("✅ 频道已加入白名单: %d", channelID))
-			return
-		}
-	}
-
-	a.sendReply(msg, "❌ 请转发一条频道消息，然后回复该消息并输入 /addwlchannel\n或者直接输入: /addwlchannel <频道ID>")
-}
-
-// handleDelWhitelistChannel removes a channel from the whitelist.
-func (a *AdminCommands) handleDelWhitelistChannel(msg *tgbotapi.Message, args string) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	args = strings.TrimSpace(args)
-	if args == "" {
-		a.sendReply(msg, "❌ 请指定频道ID\n用法: /delwlchannel <频道ID>")
-		return
-	}
-
-	var channelID int64
-	if _, err := fmt.Sscanf(args, "%d", &channelID); err != nil {
-		a.sendReply(msg, "❌ 无效的频道ID")
-		return
-	}
-
-	if a.bot.spamFilter.RemoveWhitelistedChannel(channelID) {
-		a.logger.Info("whitelist channel removed", "channel_id", channelID, "by", msg.From.ID)
-		a.sendReply(msg, fmt.Sprintf("✅ 频道已从白名单移除: %d", channelID))
-	} else {
-		a.sendReply(msg, fmt.Sprintf("❌ 频道不在白名单中: %d", channelID))
-	}
-}
-
-// handleListWhitelistChannels lists all whitelisted channels.
-func (a *AdminCommands) handleListWhitelistChannels(msg *tgbotapi.Message) {
-	if a.bot.spamFilter == nil {
-		a.sendReply(msg, "❌ 广告过滤未启用")
-		return
-	}
-
-	channels := a.bot.spamFilter.GetWhitelistedChannels()
-	if len(channels) == 0 {
-		a.sendReply(msg, "📺 频道白名单为空")
-		return
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📺 频道白名单 (%d):\n\n", len(channels)))
-	for i, channelID := range channels {
-		sb.WriteString(fmt.Sprintf("%d. %d\n", i+1, channelID))
-	}
-
-	a.sendReply(msg, sb.String())
 }
