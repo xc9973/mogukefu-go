@@ -67,13 +67,13 @@ func TestProperty2_KeywordMatchingCorrectness(t *testing.T) {
 			matcher := NewMatcher(keywords)
 			// Pick a random keyword and embed it in text
 			keyword := keywords[0]
-			text := prefix + keyword.Keyword + suffix
+			text := keyword.Keyword
 			result := matcher.Match(text)
 			if result == nil {
 				return false
 			}
 			// The matched keyword should be contained in the text (case-insensitive)
-			return strings.Contains(strings.ToLower(text), strings.ToLower(result.Keyword))
+			return strings.EqualFold(text, result.Keyword)
 		},
 		genKeywordList().SuchThat(func(k []Entry) bool { return len(k) > 0 }),
 		gen.AlphaString(),
@@ -87,12 +87,9 @@ func TestProperty2_KeywordMatchingCorrectness(t *testing.T) {
 				return true // Need at least 2 keywords
 			}
 			matcher := NewMatcher(keywords)
-			// Create text containing all keywords
-			var textParts []string
-			for _, k := range keywords {
-				textParts = append(textParts, k.Keyword)
-			}
-			text := strings.Join(textParts, " ")
+			// Only test the first keyword as we now require exact match
+			// Testing multiple keywords concatenated doesn't make sense for exact match
+			text := keywords[0].Keyword
 			result := matcher.Match(text)
 			if result == nil {
 				return false
@@ -110,8 +107,8 @@ func TestProperty2_KeywordMatchingCorrectness(t *testing.T) {
 			// Ensure text doesn't contain any keyword
 			lowerText := strings.ToLower(text)
 			for _, k := range keywords {
-				if strings.Contains(lowerText, strings.ToLower(k.Keyword)) {
-					return true // Skip this case - text accidentally contains a keyword
+				if strings.ToLower(k.Keyword) == lowerText {
+					return true // Skip this case - text accidentally matches a keyword
 				}
 			}
 			result := matcher.Match(text)
@@ -148,10 +145,10 @@ func TestProperty3_KeywordHotUpdate(t *testing.T) {
 			// Update to new keywords
 			matcher.UpdateKeywords(newKeywords)
 			
-			// Create text containing the first new keyword
-			text := "prefix " + newKeywords[0].Keyword + " suffix"
+			// Create text matching the first new keyword
+			text := newKeywords[0].Keyword
 			result := matcher.Match(text)
-			
+
 			// Should match the new keyword
 			if result == nil {
 				return false
@@ -176,14 +173,14 @@ func TestProperty3_KeywordHotUpdate(t *testing.T) {
 			matcher := NewMatcher([]Entry{oldKeyword})
 			
 			// Verify old keyword matches before update
-			text := "test " + oldKeyword.Keyword + " text"
+			text := oldKeyword.Keyword
 			if matcher.Match(text) == nil {
 				return false // Old keyword should match
 			}
-			
+
 			// Update to new keywords (without old keyword)
 			matcher.UpdateKeywords(newKeywords)
-			
+
 			// Old keyword should no longer match (unless accidentally in text)
 			result := matcher.Match(text)
 			if result == nil {
@@ -220,7 +217,7 @@ func TestMatcherConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			matcher.Match("hello world")
+			matcher.Match("hello")
 		}()
 	}
 
@@ -253,7 +250,7 @@ func TestMatchCaseInsensitive(t *testing.T) {
 		{"hello", true},
 		{"HELLO", true},
 		{"HeLLo", true},
-		{"say hello there", true},
+		{"say hello there", false},
 		{"goodbye", false},
 	}
 

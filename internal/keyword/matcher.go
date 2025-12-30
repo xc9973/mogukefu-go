@@ -48,12 +48,12 @@ func (m *DefaultMatcher) Match(text string) *Entry {
 	defer m.mu.RUnlock()
 
 	// Convert text to lowercase for case-insensitive matching
-	lowerText := strings.ToLower(text)
+	lowerText := strings.TrimSpace(strings.ToLower(text))
 
 	// Check keywords in configuration order
 	for i := range m.keywords {
 		lowerKeyword := strings.ToLower(m.keywords[i].Keyword)
-		if strings.Contains(lowerText, lowerKeyword) {
+		if lowerText == lowerKeyword {
 			// Return a copy to avoid data races
 			return &Entry{
 				Keyword: m.keywords[i].Keyword,
