@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -420,7 +421,11 @@ func (a *AdminCommands) refreshKeywordMatcher(ctx context.Context) {
 
 // sendReply sends a reply message.
 func (a *AdminCommands) sendReply(msg *tgbotapi.Message, text string) {
-	if err := a.bot.sendReply(msg, text); err != nil {
+	// Create a context with timeout for the reply
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := a.bot.sendReply(ctx, msg, text); err != nil {
 		a.logger.Error("failed to send reply", "error", err)
 	}
 }

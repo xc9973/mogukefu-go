@@ -90,8 +90,10 @@ func (c *Config) Validate() error {
 
 // BotConfig holds Telegram bot configuration.
 type BotConfig struct {
-	Token    string  `yaml:"token"`
-	AdminIDs []int64 `yaml:"admin_ids"`
+	Token          string  `yaml:"token"`
+	AdminIDs       []int64 `yaml:"admin_ids"`
+	MaxRetries     int     `yaml:"max_retries"`
+	RequestTimeout int     `yaml:"request_timeout"`
 }
 
 // EmbeddingConfig holds embedding API configuration.
@@ -114,6 +116,12 @@ func (c *Config) SetDefaults() {
 	}
 	if c.Vector.ShortMessageThreshold == 0 {
 		c.Vector.ShortMessageThreshold = 10
+	}
+	if c.Bot.MaxRetries == 0 {
+		c.Bot.MaxRetries = 3
+	}
+	if c.Bot.RequestTimeout == 0 {
+		c.Bot.RequestTimeout = 60
 	}
 }
 

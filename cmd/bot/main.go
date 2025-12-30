@@ -123,6 +123,8 @@ func main() {
 		bot.Config{
 			Token:                  cfg.Bot.Token,
 			AdminIDs:               cfg.Bot.AdminIDs,
+			MaxRetries:             cfg.Bot.MaxRetries,
+			RequestTimeout:         cfg.Bot.RequestTimeout,
 			SimilarityThreshold:    cfg.Vector.SimilarityThreshold,
 			ShortMessageThreshold:  cfg.Vector.ShortMessageThreshold,
 			EnableAntispam:         cfg.Antispam.Enabled,

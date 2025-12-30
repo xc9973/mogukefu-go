@@ -4,6 +4,7 @@ package handler
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/xc9973/mogukefu-go/internal/embedding"
 	"github.com/xc9973/mogukefu-go/internal/keyword"
@@ -62,7 +63,7 @@ func (h *MessageHandler) Handle(ctx context.Context, text string) (*Result, erro
 	result := &Result{}
 
 	// Requirement 4.1: Ignore messages shorter than 2 characters
-	if len(text) < 2 {
+	if runeLen(text) < 2 {
 		return result, nil
 	}
 
@@ -80,7 +81,7 @@ func (h *MessageHandler) Handle(ctx context.Context, text string) (*Result, erro
 	}
 
 	// Requirement 4.5: Ignore short messages if keyword not matched
-	if len(text) <= h.config.ShortMessageThreshold {
+	if runeLen(text) <= h.config.ShortMessageThreshold {
 		return result, nil
 	}
 
@@ -111,5 +112,5 @@ func (h *MessageHandler) Handle(ctx context.Context, text string) (*Result, erro
 // runeLen returns the number of runes (characters) in a string.
 // This is used for proper Unicode character counting.
 func runeLen(s string) int {
-	return len([]rune(s))
+	return utf8.RuneCountInString(s)
 }

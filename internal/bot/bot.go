@@ -34,7 +34,9 @@ type Config struct {
 	AdminIDs              []int64
 	SimilarityThreshold   float64
 	ShortMessageThreshold int
-	
+	MaxRetries            int
+	RequestTimeout        int
+
 	// Antispam settings
 	EnableAntispam         bool
 	BlockForwardedChannels bool
@@ -60,6 +62,8 @@ type TelegramBot struct {
 	deps          Dependencies
 	logger        *slog.Logger
 	stopCh        chan struct{}
+	ctx           context.Context
+	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	adminCommands *AdminCommands
 	spamFilter    *antispam.Filter
@@ -73,12 +77,16 @@ func NewTelegramBot(cfg Config, deps Dependencies, logger *slog.Logger) (*Telegr
 		return nil, fmt.Errorf("failed to create bot API: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	bot := &TelegramBot{
 		api:    api,
 		config: cfg,
 		deps:   deps,
 		logger: logger,
 		stopCh: make(chan struct{}),
+		ctx:    ctx,
+		cancel: cancel,
 	}
 
 	// Initialize admin commands handler
@@ -122,6 +130,7 @@ func (b *TelegramBot) Run() error {
 		case <-b.stopCh:
 			b.logger.Info("stopping bot")
 			b.api.StopReceivingUpdates()
+			b.cancel() // Cancel the root context
 			b.wg.Wait()
 			return nil
 
@@ -148,7 +157,13 @@ func (b *TelegramBot) Stop() error {
 // handleMessage processes an incoming message.
 // Implements Requirements 5.2, 5.3, 5.4, 5.5
 func (b *TelegramBot) handleMessage(msg *tgbotapi.Message) {
-	ctx := context.Background()
+	// Create context with timeout derived from bot's root context
+	timeout := time.Duration(b.config.RequestTimeout) * time.Second
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(b.ctx, timeout)
+	defer cancel()
 
 	// Log received message
 	// Implements Requirements 9.1
@@ -249,7 +264,7 @@ func (b *TelegramBot) handleMessage(msg *tgbotapi.Message) {
 	// Send reply if needed
 	// Implements Requirements 5.5
 	if result.ShouldReply && result.ReplyText != "" {
-		if err := b.sendReply(msg, result.ReplyText); err != nil {
+		if err := b.sendReply(ctx, msg, result.ReplyText); err != nil {
 			b.logger.Error("failed to send reply",
 				"error", err,
 				"chat_id", msg.Chat.ID,
@@ -281,33 +296,46 @@ func (b *TelegramBot) handleCommand(ctx context.Context, msg *tgbotapi.Message) 
 
 // sendReply sends a reply message with exponential backoff retry.
 // Implements Requirements 5.5, 5.6
-func (b *TelegramBot) sendReply(originalMsg *tgbotapi.Message, text string) error {
+func (b *TelegramBot) sendReply(ctx context.Context, originalMsg *tgbotapi.Message, text string) error {
 	reply := tgbotapi.NewMessage(originalMsg.Chat.ID, text)
 	reply.ReplyToMessageID = originalMsg.MessageID
 
-	return b.sendWithRetry(reply)
+	return b.sendWithRetry(ctx, reply)
 }
 
 // sendMessage sends a message to a chat.
-func (b *TelegramBot) sendMessage(chatID int64, text string) error {
+func (b *TelegramBot) sendMessage(ctx context.Context, chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
-	return b.sendWithRetry(msg)
+	return b.sendWithRetry(ctx, msg)
 }
 
 // sendWithRetry sends a message with exponential backoff retry.
 // Implements Requirements 5.6
-func (b *TelegramBot) sendWithRetry(msg tgbotapi.MessageConfig) error {
+func (b *TelegramBot) sendWithRetry(ctx context.Context, msg tgbotapi.MessageConfig) error {
 	// Ensure text is valid UTF-8 before sending
 	msg.Text = sanitizeUTF8(msg.Text)
 
-	maxRetries := 3
+	maxRetries := b.config.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			// Exponential backoff: 1s, 2s, 4s
 			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-			time.Sleep(backoff)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				// continue
+			}
+		}
+
+		// Check context before sending
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		_, err := b.api.Send(msg)

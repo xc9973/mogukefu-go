@@ -58,14 +58,20 @@ type Filter struct {
 
 // NewFilter creates a new spam filter.
 func NewFilter(cfg Config) *Filter {
+	// Pre-lowercase spam keywords
+	spamKeywords := make([]string, len(cfg.SpamKeywords))
+	for i, kw := range cfg.SpamKeywords {
+		spamKeywords[i] = strings.ToLower(kw)
+	}
+
 	f := &Filter{
 		config:            cfg,
-		spamKeywords:      cfg.SpamKeywords,
+		spamKeywords:      spamKeywords,
 		whitelistDomains:  make(map[string]bool),
 		whitelistUsers:    make(map[int64]bool),
 		whitelistChannels: make(map[int64]bool),
 	}
-	
+
 	// Build whitelist maps
 	for _, domain := range cfg.WhitelistedDomains {
 		f.whitelistDomains[strings.ToLower(domain)] = true
@@ -89,7 +95,7 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 	if msg.From != nil && f.isUserWhitelisted(msg.From.ID) {
 		return &FilterResult{IsSpam: false}
 	}
-	
+
 	// Check forwarded messages from channels
 	if f.config.BlockForwardedChannels {
 		if reason := f.checkChannelSpam(msg); reason != "" {
@@ -100,25 +106,33 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 			}
 		}
 	}
-	
+
+	// Helper for text-based checks
+	// Get message text and compute lowercase version once
+	text := msg.Text
+	if text == "" {
+		text = msg.Caption
+	}
+	textLower := strings.ToLower(text)
+
 	// Check for external links
-	if f.config.BlockExternalLinks && f.hasExternalLinks(msg) {
+	if f.config.BlockExternalLinks && f.hasExternalLinks(msg, text, textLower) {
 		return &FilterResult{
 			IsSpam: true,
 			Reason: "包含外部链接",
 			Action: ActionDelete,
 		}
 	}
-	
+
 	// Check for spam keywords
-	if f.config.BlockKeywords && f.hasSpamKeywords(msg) {
+	if f.config.BlockKeywords && f.hasSpamKeywords(textLower) {
 		return &FilterResult{
 			IsSpam: true,
 			Reason: "包含广告关键词",
 			Action: ActionDelete,
 		}
 	}
-	
+
 	return &FilterResult{IsSpam: false}
 }
 
@@ -195,15 +209,11 @@ func (f *Filter) isChannelWhitelisted(channelID int64) bool {
 }
 
 // hasExternalLinks checks if message contains external links.
-func (f *Filter) hasExternalLinks(msg *tgbotapi.Message) bool {
-	text := msg.Text
-	if text == "" {
-		text = msg.Caption
-	}
+func (f *Filter) hasExternalLinks(msg *tgbotapi.Message, text, textLower string) bool {
 	if text == "" {
 		return false
 	}
-	
+
 	// Find all URLs
 	matches := f.urlRegex.FindAllString(text, -1)
 	for _, match := range matches {
@@ -211,7 +221,7 @@ func (f *Filter) hasExternalLinks(msg *tgbotapi.Message) bool {
 			return true
 		}
 	}
-	
+
 	// Check entities for URLs
 	entities := msg.Entities
 	if entities == nil {
@@ -222,14 +232,16 @@ func (f *Filter) hasExternalLinks(msg *tgbotapi.Message) bool {
 			url := entity.URL
 			if url == "" && entity.Type == "url" {
 				// Extract URL from text
-				url = text[entity.Offset : entity.Offset+entity.Length]
+				if entity.Offset+entity.Length <= len(text) {
+					url = text[entity.Offset : entity.Offset+entity.Length]
+				}
 			}
 			if !f.isWhitelistedURL(url) {
 				return true
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -250,49 +262,49 @@ func (f *Filter) isWhitelistedURL(url string) bool {
 }
 
 // hasSpamKeywords checks if message contains spam keywords.
-func (f *Filter) hasSpamKeywords(msg *tgbotapi.Message) bool {
-	text := strings.ToLower(msg.Text)
-	if text == "" {
-		text = strings.ToLower(msg.Caption)
-	}
-	if text == "" {
+func (f *Filter) hasSpamKeywords(textLower string) bool {
+	if textLower == "" {
 		return false
 	}
-	
+
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	
+
 	for _, keyword := range f.spamKeywords {
-		if strings.Contains(text, strings.ToLower(keyword)) {
+		if strings.Contains(textLower, keyword) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // UpdateSpamKeywords updates the spam keywords list.
 func (f *Filter) UpdateSpamKeywords(keywords []string) {
+	lowerKeywords := make([]string, len(keywords))
+	for i, kw := range keywords {
+		lowerKeywords[i] = strings.ToLower(kw)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.spamKeywords = keywords
+	f.spamKeywords = lowerKeywords
 }
 
 // AddSpamKeyword adds a spam keyword.
 func (f *Filter) AddSpamKeyword(keyword string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.spamKeywords = append(f.spamKeywords, keyword)
+	f.spamKeywords = append(f.spamKeywords, strings.ToLower(keyword))
 }
 
 // RemoveSpamKeyword removes a spam keyword.
 func (f *Filter) RemoveSpamKeyword(keyword string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	
+
 	keyword = strings.ToLower(keyword)
 	for i, kw := range f.spamKeywords {
-		if strings.ToLower(kw) == keyword {
+		if kw == keyword {
 			f.spamKeywords = append(f.spamKeywords[:i], f.spamKeywords[i+1:]...)
 			return true
 		}
