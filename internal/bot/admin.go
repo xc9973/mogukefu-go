@@ -127,7 +127,7 @@ func (a *AdminCommands) handleAddKeyword(ctx context.Context, msg *tgbotapi.Mess
 
 	if err := a.deps.KBStore.AddKeyword(ctx, kw, reply); err != nil {
 		a.logger.Error("failed to add keyword", "error", err, "keyword", kw)
-		a.sendReply(msg, fmt.Sprintf("❌ 添加失败: %v", err))
+		a.sendReply(msg, "❌ 添加失败，请检查日志")
 		return
 	}
 
@@ -148,7 +148,7 @@ func (a *AdminCommands) handleDeleteKeyword(ctx context.Context, msg *tgbotapi.M
 
 	if err := a.deps.KBStore.DeleteKeyword(ctx, kw); err != nil {
 		a.logger.Error("failed to delete keyword", "error", err, "keyword", kw)
-		a.sendReply(msg, fmt.Sprintf("❌ 删除失败: %v", err))
+		a.sendReply(msg, "❌ 删除失败，请检查日志")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (a *AdminCommands) handleListKeywords(ctx context.Context, msg *tgbotapi.Me
 	keywords, err := a.deps.KBStore.GetAllKeywords(ctx)
 	if err != nil {
 		a.logger.Error("failed to list keywords", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 获取关键词失败: %v", err))
+		a.sendReply(msg, "❌ 获取关键词失败，请检查日志")
 		return
 	}
 
@@ -212,7 +212,7 @@ func (a *AdminCommands) handleAddFAQ(ctx context.Context, msg *tgbotapi.Message,
 	vec, err := a.deps.EmbeddingClient.Embed(ctx, question)
 	if err != nil {
 		a.logger.Error("failed to generate embedding", "error", err, "faq_id", faqID)
-		a.sendReply(msg, fmt.Sprintf("❌ 生成向量失败: %v", err))
+		a.sendReply(msg, "❌ 生成向量失败，请检查日志")
 		return
 	}
 
@@ -225,7 +225,7 @@ func (a *AdminCommands) handleAddFAQ(ctx context.Context, msg *tgbotapi.Message,
 
 	if err := a.deps.VectorStore.AddFAQ(ctx, faq, vec); err != nil {
 		a.logger.Error("failed to add FAQ", "error", err, "faq_id", faqID)
-		a.sendReply(msg, fmt.Sprintf("❌ 添加FAQ失败: %v", err))
+		a.sendReply(msg, "❌ 添加FAQ失败，请检查日志")
 		return
 	}
 
@@ -243,7 +243,7 @@ func (a *AdminCommands) handleDeleteFAQ(ctx context.Context, msg *tgbotapi.Messa
 
 	if err := a.deps.VectorStore.DeleteFAQ(ctx, faqID); err != nil {
 		a.logger.Error("failed to delete FAQ", "error", err, "faq_id", faqID)
-		a.sendReply(msg, fmt.Sprintf("❌ 删除失败: %v", err))
+		a.sendReply(msg, "❌ 删除失败，请检查日志")
 		return
 	}
 
@@ -256,7 +256,7 @@ func (a *AdminCommands) handleListFAQs(ctx context.Context, msg *tgbotapi.Messag
 	faqs, err := a.deps.VectorStore.GetAllFAQs(ctx)
 	if err != nil {
 		a.logger.Error("failed to list FAQs", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 获取FAQ失败: %v", err))
+		a.sendReply(msg, "❌ 获取FAQ失败，请检查日志")
 		return
 	}
 
@@ -291,7 +291,7 @@ func (a *AdminCommands) handleShowFAQ(ctx context.Context, msg *tgbotapi.Message
 	faq, err := a.deps.VectorStore.GetFAQ(ctx, faqID)
 	if err != nil {
 		a.logger.Error("failed to get FAQ", "error", err, "faq_id", faqID)
-		a.sendReply(msg, fmt.Sprintf("❌ 获取FAQ失败: %v", err))
+		a.sendReply(msg, "❌ 获取FAQ失败，请检查日志")
 		return
 	}
 
@@ -311,7 +311,7 @@ func (a *AdminCommands) handleExportKB(ctx context.Context, msg *tgbotapi.Messag
 	yamlContent, err := a.deps.KBStore.ExportToYAML(ctx)
 	if err != nil {
 		a.logger.Error("failed to export KB", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 导出失败: %v", err))
+		a.sendReply(msg, "❌ 导出失败，请检查日志")
 		return
 	}
 
@@ -360,7 +360,7 @@ func (a *AdminCommands) handleImportKB(ctx context.Context, msg *tgbotapi.Messag
 	file, err := a.bot.GetAPI().GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
 		a.logger.Error("failed to get file", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 获取文件失败: %v", err))
+		a.sendReply(msg, "❌ 获取文件失败，请检查日志")
 		return
 	}
 
@@ -369,7 +369,7 @@ func (a *AdminCommands) handleImportKB(ctx context.Context, msg *tgbotapi.Messag
 	resp, err := http.Get(fileURL)
 	if err != nil {
 		a.logger.Error("failed to download file", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 下载文件失败: %v", err))
+		a.sendReply(msg, "❌ 下载文件失败，请检查日志")
 		return
 	}
 	defer resp.Body.Close()
@@ -378,7 +378,7 @@ func (a *AdminCommands) handleImportKB(ctx context.Context, msg *tgbotapi.Messag
 	content, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024)) // 1MB max
 	if err != nil {
 		a.logger.Error("failed to read file", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 读取文件失败: %v", err))
+		a.sendReply(msg, "❌ 读取文件失败，请检查日志")
 		return
 	}
 	yamlContent := string(content)
@@ -386,7 +386,7 @@ func (a *AdminCommands) handleImportKB(ctx context.Context, msg *tgbotapi.Messag
 	// Import
 	if err := a.deps.KBStore.ImportFromYAML(ctx, yamlContent, mode); err != nil {
 		a.logger.Error("failed to import KB", "error", err)
-		a.sendReply(msg, fmt.Sprintf("❌ 导入失败: %v", err))
+		a.sendReply(msg, "❌ 导入失败，请检查日志")
 		return
 	}
 

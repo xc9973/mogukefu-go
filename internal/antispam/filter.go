@@ -84,7 +84,9 @@ func NewFilter(cfg Config) *Filter {
 	}
 	
 	// Compile URL regex
-	f.urlRegex = regexp.MustCompile(`(?i)(https?://|t\.me/|@)[^\s]+`)
+	// Modified to NOT match @mentions (e.g. @username) as URLs
+	// Original: `(?i)(https?://|t\.me/|@)[^\s]+`
+	f.urlRegex = regexp.MustCompile(`(?i)(https?://|t\.me/)[^\s]+`)
 	
 	return f
 }

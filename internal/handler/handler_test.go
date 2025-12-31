@@ -262,19 +262,19 @@ func TestProperty8_KeywordReplyPriority(t *testing.T) {
 
 	// Property 8: Keyword match returns keyword reply, not FAQ
 	properties.Property("keyword match returns keyword reply", prop.ForAll(
-		func(kw keyword.Entry, prefix string, suffix string) bool {
+		func(kw keyword.Entry) bool {
 			if len(kw.Keyword) == 0 {
 				return true // Skip empty keywords
 			}
-			
-			// Create message containing the keyword
-			msg := prefix + kw.Keyword + suffix
+
+			// Create message EXACTLY matching the keyword
+			msg := kw.Keyword
 			if len(msg) < 2 {
 				return true // Skip too short messages
 			}
 
 			matcher := keyword.NewMatcher([]keyword.Entry{kw})
-			
+
 			// Add a FAQ that would also match
 			store := newMockVectorStore()
 			store.AddFAQ(context.Background(), vector.FAQEntry{
@@ -282,7 +282,7 @@ func TestProperty8_KeywordReplyPriority(t *testing.T) {
 				Question: "test question",
 				Answer:   "FAQ answer that should NOT be returned",
 			}, []float64{float64(len(msg)), 0.5, 0.5})
-			
+
 			client := &mockEmbeddingClient{}
 			handler := New(matcher, store, client, Config{
 				ShortMessageThreshold: 1, // Allow short messages
@@ -293,15 +293,13 @@ func TestProperty8_KeywordReplyPriority(t *testing.T) {
 			if err != nil {
 				return false
 			}
-			
+
 			// Should return keyword reply, not FAQ answer
-			return result.ShouldReply && 
-				result.ReplyText == kw.Reply && 
+			return result.ShouldReply &&
+				result.ReplyText == kw.Reply &&
 				result.MatchedKeyword == kw.Keyword
 		},
 		genKeywordEntry(),
-		gen.AlphaString(),
-		gen.AlphaString(),
 	))
 
 	properties.TestingRun(t)
@@ -495,10 +493,16 @@ func TestHandleBasicCases(t *testing.T) {
 		},
 		{
 			name:        "keyword match",
-			msg:         "hello world",
+			msg:         "hello",
 			keywords:    []keyword.Entry{{Keyword: "hello", Reply: "hi there"}},
 			expectReply: true,
 			expectText:  "hi there",
+		},
+		{
+			name:        "keyword partial match (should not match)",
+			msg:         "hello world",
+			keywords:    []keyword.Entry{{Keyword: "hello", Reply: "hi there"}},
+			expectReply: false,
 		},
 		{
 			name:        "short message no keyword",
