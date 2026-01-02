@@ -2,6 +2,7 @@
 package antispam
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -86,7 +87,7 @@ func NewFilter(cfg Config) *Filter {
 	// Compile URL regex
 	// Modified to NOT match @mentions (e.g. @username) as URLs
 	// Original: `(?i)(https?://|t\.me/|@)[^\s]+`
-	f.urlRegex = regexp.MustCompile(`(?i)(https?://|t\.me/)[^\s]+`)
+	f.urlRegex = regexp.MustCompile(`(?i)(https?://|www\.|t\.me/)[^\s]+`)
 	
 	return f
 }
@@ -248,18 +249,33 @@ func (f *Filter) hasExternalLinks(msg *tgbotapi.Message, text, textLower string)
 }
 
 // isWhitelistedURL checks if a URL is from a whitelisted domain.
-func (f *Filter) isWhitelistedURL(url string) bool {
-	url = strings.ToLower(url)
-	
+func (f *Filter) isWhitelistedURL(rawURL string) bool {
+	rawURL = strings.ToLower(rawURL)
+	// Add a scheme if missing, to help url.Parse
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "http://" + rawURL
+	}
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		// If parsing fails, deny.
+		return false
+	}
+
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		return false
+	}
+
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	
+
 	for domain := range f.whitelistDomains {
-		if strings.Contains(url, domain) {
+		if hostname == domain || strings.HasSuffix(hostname, "."+domain) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
