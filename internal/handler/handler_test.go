@@ -486,6 +486,12 @@ func TestHandleBasicCases(t *testing.T) {
 			expectReply: false,
 		},
 		{
+			name:        "single CJK char message",
+			msg:         "嗨",
+			keywords:    []keyword.Entry{},
+			expectReply: false,
+		},
+		{
 			name:        "command message",
 			msg:         "/start",
 			keywords:    []keyword.Entry{},

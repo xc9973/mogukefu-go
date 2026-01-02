@@ -66,14 +66,12 @@ func (h *MessageHandler) Handle(ctx context.Context, text string) (*Result, erro
 	// Optimization: Allow single CJK character (which can be a full word)
 	// but ignore single ASCII/Latin character.
 	length := runeLen(text)
-	if length < 1 {
+	if length == 0 {
 		return result, nil
 	}
 	if length == 1 {
-		// Check if it's a CJK character (usually > 127, simplified check)
-		// A more robust check would involve unicode ranges, but checking for ASCII is a good heuristic
 		r, _ := utf8.DecodeRuneInString(text)
-		if r < 128 {
+		if r < 128 { // non-CJK character
 			return result, nil
 		}
 	}
