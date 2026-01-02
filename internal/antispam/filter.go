@@ -100,6 +100,7 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 	}
 
 	// Check forwarded messages from channels
+	isFromWhitelistedChannel := false
 	if f.config.BlockForwardedChannels {
 		if reason := f.checkChannelSpam(msg); reason != "" {
 			return &FilterResult{
@@ -108,6 +109,8 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 				Action: ActionDelete,
 			}
 		}
+		// Track if message is from whitelisted channel
+		isFromWhitelistedChannel = f.isFromWhitelistedChannel(msg)
 	}
 
 	// Helper for text-based checks
@@ -118,8 +121,8 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 	}
 	textLower := strings.ToLower(text)
 
-	// Check for external links
-	if f.config.BlockExternalLinks && f.hasExternalLinks(msg, text, textLower) {
+	// Skip external link check for whitelisted channels
+	if !isFromWhitelistedChannel && f.config.BlockExternalLinks && f.hasExternalLinks(msg, text, textLower) {
 		return &FilterResult{
 			IsSpam: true,
 			Reason: "包含外部链接",
@@ -127,8 +130,8 @@ func (f *Filter) Check(msg *tgbotapi.Message) *FilterResult {
 		}
 	}
 
-	// Check for spam keywords
-	if f.config.BlockKeywords && f.hasSpamKeywords(textLower) {
+	// Skip keyword check for whitelisted channels
+	if !isFromWhitelistedChannel && f.config.BlockKeywords && f.hasSpamKeywords(textLower) {
 		return &FilterResult{
 			IsSpam: true,
 			Reason: "包含广告关键词",
@@ -209,6 +212,17 @@ func (f *Filter) isChannelWhitelisted(channelID int64) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.whitelistChannels[channelID]
+}
+
+// isFromWhitelistedChannel checks if message is from a whitelisted channel.
+func (f *Filter) isFromWhitelistedChannel(msg *tgbotapi.Message) bool {
+	if msg.ForwardFromChat != nil && msg.ForwardFromChat.Type == "channel" {
+		return f.isChannelWhitelisted(msg.ForwardFromChat.ID)
+	}
+	if msg.SenderChat != nil && msg.SenderChat.Type == "channel" {
+		return f.isChannelWhitelisted(msg.SenderChat.ID)
+	}
+	return false
 }
 
 // hasExternalLinks checks if message contains external links.
